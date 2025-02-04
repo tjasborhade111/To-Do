@@ -1,13 +1,13 @@
-// models/Task.js
 const mongoose = require('mongoose');
 
-// Define the Task schema
+// Task Schema
 const taskSchema = new mongoose.Schema({
     name: { type: String, required: true },
     priority: { type: Number, required: true },
-    dueDate: { type: Date, required: true }
+    dueDate: { type: Date, required: true },
+    sessionId: { type: String, required: true } // Store session ID to identify the user
 });
 
-// Create and export the model
 const Task = mongoose.model('Task', taskSchema);
+
 module.exports = Task;
