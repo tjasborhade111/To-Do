@@ -1,8 +1,12 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const session = require('express-session');
 const bodyParser = require('body-parser');
 const path = require('path');
+const Task = require('./models/Task');  // Import the Task model
+
 const app = express();
+const PORT = 5000;
 
 // Middleware to parse JSON data
 app.use(bodyParser.json());
@@ -16,18 +20,18 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // MongoDB connection
-mongoose.connect('mongodb://localhost:27017/todo-list', { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log('Connected to MongoDB'))
-    .catch(err => console.error('Failed to connect to MongoDB', err));
+mongoose.connect('mongodb://localhost:27017/todoDB', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}).then(() => console.log("Connected to MongoDB"))
+  .catch(err => console.error("Could not connect to MongoDB", err));
 
-// Define Task Schema with date and time
-const taskSchema = new mongoose.Schema({
-    name: String,
-    priority: Number,
-    dueDate: Date, // Store both date and time
-});
-
-const Task = mongoose.model('Task', taskSchema);
+// Session setup
+app.use(session({
+    secret: 'mysecretkey',
+    resave: false,
+    saveUninitialized: true
+}));
 
 // Route to serve the login page (login.ejs)
 app.get('/login', (req, res) => {
@@ -42,8 +46,8 @@ app.get('/', (req, res) => {
 // Route to render the To-Do list page (index.ejs) with tasks
 app.get('/todo', async (req, res) => {
     try {
-        const tasks = await Task.find(); // Get tasks from MongoDB
-        res.render('index', { tasks }); // Render the To-Do list page
+        const tasks = await Task.find({ sessionId: req.sessionID }); // Get tasks for current session ID
+        res.render('index', { tasks }); // Render the To-Do list page with tasks
     } catch (err) {
         res.status(500).send('Error fetching tasks');
     }
@@ -51,22 +55,31 @@ app.get('/todo', async (req, res) => {
 
 // POST route to add new task with date and time
 app.post('/add-task', async (req, res) => {
-    const { name, priority, dueDate, dueTime } = req.body;
+    const { name, priority, dueDate, hour, minute, ampm } = req.body;
 
-    // Combine date and time into a single Date object
+    // Convert hour to 24-hour format
+    let formattedHour = parseInt(hour);
+    if (ampm === 'PM' && formattedHour !== 12) {
+        formattedHour += 12;
+    }
+    if (ampm === 'AM' && formattedHour === 12) {
+        formattedHour = 0;
+    }
+
+    // Create a new Date object with the correct time
     const date = new Date(dueDate);
-    const [hours, minutes] = dueTime.split(':');
-    date.setHours(hours, minutes);
+    date.setHours(formattedHour, parseInt(minute), 0, 0); // Set hours, minutes, seconds, milliseconds
 
     const task = new Task({
         name,
         priority,
         dueDate: date,
+        sessionId: req.sessionID // Save the session ID with the task
     });
 
     try {
         await task.save();
-        res.redirect('/todo'); // Redirect to To-Do list after adding task
+        res.redirect('/todo'); // Redirect back to the todo list
     } catch (err) {
         res.status(500).send('Error adding task');
     }
@@ -87,7 +100,7 @@ app.delete('/delete-task/:id', async (req, res) => {
     }
 });
 
-//Start the server
-app.listen(3000, () => {
-    console.log('Server running on http://localhost:3000');
+// Start the server
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
